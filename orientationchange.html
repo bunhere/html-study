@@ -18,9 +18,9 @@ div#box {
 $(function() {
    $(window).bind("orientationchange", function() {
        var orientation = window.orientation;
+       window.alert(orientation);
        $("div#box").css('-webkit-transform', 'rotate(' + orientation + 'deg)');
        });
-       $("div#result").text(orientation);
 });
 </script>
 </head>

@@ -20,10 +20,12 @@ $(function() {
        var orientation = window.orientation;
        $("div#box").css('-webkit-transform', 'rotate(' + orientation + 'deg)');
        });
+       $("div#result").text(orientation);
 });
 </script>
 </head>
 <body>
+<div id="result"></div>
 <div id="box"></div>
 </body>
 </html>

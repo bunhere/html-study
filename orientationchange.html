@@ -1,0 +1,29 @@
+<html>
+<head>
+<style>
+body {
+  width:320;
+  margin:auto;
+}
+div#box {
+  width: 200;
+  height: 200;
+  background-color: red;
+  border-top: 5px solid #00ef00;
+  -webkit-transition: 1s ease;
+}
+</style>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+<script>
+$(function() {
+   $(window).bind("orientationchange", function() {
+       var orientation = window.orientation;
+       $("div#box").css('-webkit-transform', 'rotate(' + orientation + 'deg)');
+       });
+});
+</script>
+</head>
+<body>
+<div id="box"></div>
+</body>
+</html>

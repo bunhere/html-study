@@ -18,14 +18,15 @@ div#box {
 $(function() {
    $(window).bind("orientationchange", function() {
        var orientation = window.orientation;
-       window.alert(orientation);
+       //window.alert(orientation);
        $("div#box").css('-webkit-transform', 'rotate(' + orientation + 'deg)');
-       });
+       $("result").text("window :" + window.orientation + "/ screen :" + screen.orientation);
+       });    
 });
 </script>
 </head>
 <body>
-<div id="result"></div>
+<div id="result"></div><br><br>
 <div id="box"></div>
 </body>
 </html>

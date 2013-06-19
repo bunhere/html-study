@@ -9,17 +9,19 @@ div#orientation { background-color:blue;}
 {
 div#orientation { background-color:red;}
 }
-@media screen and (min-device-aspect-ratio:1/1)
+@media screen and (max-device-aspect-ratio:1/1)
 {
 div#aspect { background-color:blue;}
 }
-@media screen and (max-device-aspect-ratio:1/1)
+@media screen and (min-device-aspect-ratio:1/1)
 {
 div#aspect { background-color:red;}
 }
 </style>
 </head>
 <body>
+blue is portrait <br>
+red is landscape
 <div id="orientation" style="width:300px;height:300px;">ORIENTATION</div>
 <div id="aspect" style="width:300px;height:300px;">ASPECT</div>
 </body>

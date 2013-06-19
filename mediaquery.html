@@ -17,11 +17,20 @@ div#aspect { background-color:blue;}
 {
 div#aspect { background-color:red;}
 }
+@media screen and (max-width:500px)
+{
+div#widthDiv { background-color:blue;}
+}
+@media screen and (min-width:500px)
+{
+div#widthDiv { background-color:red;}
+}
 </style>
 </head>
 <body>
 blue is portrait <br>
 red is landscape<br>
-<div id="orientation" style="width:300px;height:300px;">ORIENTATION</div>
-<div id="aspect" style="width:300px;height:300px;">ASPECT</div>
+<div id="orientation" style="width:200px;height:200px;">ORIENTATION</div>
+<div id="aspect" style="width:200px;height:200px;">ASPECT</div>
+<div id="widthDiv" style="width:200px;height:200px;">width(blue : max 500px/red : min 500px)</div>
 </body>

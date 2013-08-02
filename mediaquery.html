@@ -1,14 +1,6 @@
 <!doctype html>
 <head>
 <style>
-@media screen and (orientation:portrait)
-{
-div#orientation { background-color:blue;}
-}
-@media screen and (orientation:landscape)
-{
-div#orientation { background-color:red;}
-}
 @media screen and (max-device-aspect-ratio:1/1)
 {
 div#aspect { background-color:blue;}
@@ -17,32 +9,10 @@ div#aspect { background-color:blue;}
 {
 div#aspect { background-color:red;}
 }
-@media screen and (max-width:720px)
-{
-div#widthDiv { background-color:blue;}
-}
-@media screen and (min-width:720px)
-{
-div#widthDiv { background-color:red;}
-}
-@media screen and (max-device-width:720px)
-{
-div#dwidthDiv { background-color:blue;}
-}
-@media screen and (min-device-width:720px)
-{
-div#dwidthDiv { background-color:red;}
-}
 </style>
 </head>
 <body>
 blue is portrait <br>
 red is landscape<br>
-<div id="orientation" style="width:200px;height:200px;">ORIENTATION</div>
 <div id="aspect" style="width:200px;height:200px;">ASPECT</div>
-<div id="widthDiv" style="width:200px;height:200px;">width(blue : max 720px/red : min 720px)</div>
-<div id="dwidthDiv" style="width:200px;height:200px;">dwidth(blue : max 720px/red : min 720px)</div>
-<script>
-  window.aleret((window.innerWidth > 0) ? window.innerWidth : screen.width);
-</script>
 </body>

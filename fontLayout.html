@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Vellamo - HTML5 Layout Moving Text</title> 
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<style>
+div {
+font-family: 'NanumGothic';
+}
+</style>
+<script src="http://www.google.com/jsapi"></script>
+  <script>
+   google.load( "webfont", "1" );
+   google.setOnLoadCallback(function() {
+    WebFont.load({ custom: {
+     families: [ "NanumGothic" ],
+     urls: [ "http://fontface.kr/NanumGothic/css" ]
+    }});
+   });
+  </script>
+<script type="text/javascript">
+var sampleFPS, lastSampledTime, sampleFrames;
+var repeat = "The barge she sat in, like a burnish'd throne, burnt on the water. The poop was beaten gold, purple the sails, and so perfumèd that the winds were love-sick with them; the oars were silver, which to the tune of flutes kept stroke, and made the water which they beat to follow faster, as amorous of their strokes. For her own person, it beggar'd all description: she did lie in her pavilion - cloth of gold, of tissue - o'er-picturing that Venus where we see the fancy outwork nature.<br>";
+var current, results;
+var fps, layoutPadding, borderWidth;
+var div1, div2, div3, div4, div5;
+
+var continueTest;
+var testBegan;
+var sampleDuration = 500;	//minimum of half-second
+var samples;
+
+var outerGrowing = true;
+var MAXDIM = 900;	//layout square dimension
+var outerLong = Math.floor(2 * MAXDIM / 3);
+var outerMax = Math.floor(5 * MAXDIM / 6);
+var outerMin = Math.floor(5 * MAXDIM / 9);
+
+function createLongString(s, numDouble) {
+	'use strict';
+	var out, i;
+
+	out = s;
+	for (i = 0; i < numDouble; i += 1) {
+		out += out;
+	}
+	return out;
+}
+
+function getFrameRate() {
+	'use strict';
+
+	sampleFrames += 1;
+	var diff = new Date().getTime() - lastSampledTime;
+	if (diff >= sampleDuration) {
+		sampleFPS = sampleFrames / (diff / 1000);
+		sampleFrames = 0;
+		lastSampledTime = new Date().getTime();
+	}
+	return sampleFPS;
+}
+
+function reshape() {
+	'use strict';
+	var currentTime, output, timePassed;
+	var top, topPx, longText, longPx, short, shortText, shortPx, margin, side;
+
+	if (outerGrowing) {
+		outerLong += 2;
+		if (outerLong >= outerMax) {
+			outerGrowing = false;
+			div1.style.fontSize = "x-small";
+			div2.style.fontSize = "x-small";
+			div3.style.fontSize = "x-small";
+			div4.style.fontSize = "x-small";
+			div5.style.fontSize = "x-small";
+		}
+	} else {
+		outerLong -= 2;
+		if (outerLong <= outerMin) {
+			continueTest = false;
+			current.innerHTML = "";
+    		currentTime = new Date().getTime();
+	    	timePassed = currentTime - testBegan;
+			output = samples / timePassed * 1000;
+			if (window.vellamo)
+				window.vellamo.write(output.toFixed(2));
+			else
+				console.log("result: " + output)
+		}
+	}
+	top = fps.clientHeight;
+	topPx = top + "px"
+	longText = outerLong - 2 * layoutPadding - borderWidth;
+	longPx = longText + "px";
+	short = MAXDIM - outerLong;
+	shortText = short - 2 * layoutPadding - borderWidth;
+	shortPx = shortText + "px";
+	margin = (document.body.clientWidth - (longText + shortText)) / 2;
+
+    div1.style.top = topPx;
+    div1.style.left = margin + "px";
+	div1.style.width = longPx;
+	div1.style.height = shortPx;
+
+    div2.style.top = topPx;
+    div2.style.left = (margin + outerLong) + "px";
+	div2.style.width = shortPx;
+	div2.style.height = longPx;
+
+    div3.style.top = (top + longText + 2 * layoutPadding + borderWidth) + "px";
+    div3.style.left = (margin + short) + "px";
+	div3.style.width = longPx;
+	div3.style.height = shortPx;
+    
+    div4.style.top = (top + short) + "px";
+    div4.style.left = margin + "px";
+	div4.style.width = shortPx;
+	div4.style.height = longPx;
+
+	div5.style.top = (top + short) + "px";
+	div5.style.left = (margin + short) + "px";
+	side = (MAXDIM - 2 * (short + layoutPadding) - borderWidth) + "px";
+	div5.style.width = side;
+	div5.style.height = side;
+}
+
+function processFrame() {
+	'use strict';
+
+	if (continueTest) {
+	    reshape();
+		samples += 1;
+		current.innerHTML = getFrameRate().toFixed(2);
+	}
+}
+
+var start = function () {
+	'use strict';
+	var content;
+
+	current = document.getElementById("current");
+    fps = document.getElementById("fps");
+
+	content = createLongString(repeat, 5);
+	div1 = document.getElementById("div1");
+	div1.innerHTML = content;
+	div2 = document.getElementById("div2");
+	div2.innerHTML = content;
+	div3 = document.getElementById("div3");
+	div3.innerHTML = content;
+	div4 = document.getElementById("div4");
+	div4.innerHTML = content;
+	div5 = document.getElementById("div5");
+	div5.innerHTML = content;
+	layoutPadding = parseInt(div1.style.padding);
+    borderWidth = parseInt(div1.style.borderWidth);
+
+    reshape();
+
+	sampleFPS = 0;
+	lastSampledTime = new Date().getTime();
+	sampleFrames = 0;
+	setInterval(processFrame, 1000 / 60);	//60 per second
+	testBegan = new Date().getTime();
+	continueTest = true;
+	samples = 0;
+};
+</script>
+</head>
+<body style="width:100%; font-family:helvetica; margin:0px; background-color:#002839; color:#FFFFFF;">
+  <input type="button" onclick="start();">
+	<div id="fps" style="margin-left:auto; margin-right:auto; text-align:center; font-weight:bold;">
+		<div id="current">0.00</div>
+	<div>
+	<div id="div1" style="position:absolute; padding:2px; border:solid 1px #000000; overflow: hidden;"></div>
+	<div id="div2" style="position:absolute; padding:2px; border:solid 1px #000000; overflow: hidden;"></div>
+	<div id="div3" style="position:absolute; padding:2px; border:solid 1px #000000; overflow: hidden;"></div>
+	<div id="div4" style="position:absolute; padding:2px; border:solid 1px #000000; overflow: hidden;"></div>
+	<div id="div5" style="position:absolute; padding:2px; border:solid 2px cyan; overflow: hidden; color: cyan;"></div>
+</body>
+</html>

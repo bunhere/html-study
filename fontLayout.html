@@ -139,6 +139,12 @@ var start = function () {
 	'use strict';
 	var content;
 
+outerGrowing = true;
+MAXDIM = 900;	//layout square dimension
+outerLong = Math.floor(2 * MAXDIM / 3);
+outerMax = Math.floor(5 * MAXDIM / 6);
+outerMin = Math.floor(5 * MAXDIM / 9);
+
 	current = document.getElementById("current");
     fps = document.getElementById("fps");
 
@@ -169,7 +175,7 @@ var start = function () {
 </script>
 </head>
 <body style="width:100%; font-family:helvetica; margin:0px; background-color:#002839; color:#FFFFFF;">
-  <input type="button" onclick="start();">
+  <input type="button" onclick="start();" value="Nanum start">
 	<div id="fps" style="margin-left:auto; margin-right:auto; text-align:center; font-weight:bold;">
 		<div id="current">0.00</div>
 	<div>

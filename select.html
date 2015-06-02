@@ -1,0 +1,16 @@
+<!DOCTYPE HTML>
+
+<body>
+<select><option>first</option><option disabled>second</option><option selected dir="rtl" title="tooltip" aria-label="aria">third</option>
+</select>
+<input type="button" id="button" value="willFocusedButton" onclick="alert('test');"></input>
+<script>
+function a() {
+    document.getElementById("button").focus();
+    //location.href="./next.html"
+}
+window.addEventListener('load', function() {
+   window.setTimeout(a, 3000);
+}, false);
+</script>
+</body>

@@ -7,11 +7,15 @@ function test2(){
     var di = document.getElementById("di");
     di.innerHTML = "app have not installed";
 }
+function test3(){
+    var di = document.getElementById("di");
+    di.innerHTML = "app have not installed 2";
+}
 function newOpen(){
     var di = document.getElementById("di");
     di.innerHTML = "app have installed";
     var ifc = document.getElementById("ifc");
-    ifc.innerHTML = "<iframe src='pedaling://pedaling.is?a=b&c=d' onload='test2()'></iframe>";
+    ifc.innerHTML = "<iframe src='pedaling://pedaling.is?a=b&c=d' onload='test2()' onerror="test3()"></iframe>";
     return false;
 }
 </script>

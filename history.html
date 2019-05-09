@@ -1,0 +1,16 @@
+<!doctype html>
+<body>
+<div id="result"></div>
+</body>
+<script>
+window.onpopstate = function(event) {
+    document.getElementById("result").innerHTML = 
+        document.getElementById("result").innerHTML + "<br>state: " + JSON.stringify(event.state);
+}
+
+history.pushState({page: 1}, "page 1", "history1.html");
+history.pushState({page: 2}, "page 2", "history2.html");
+
+document.getElementById("result").innerHTML = 
+    document.getElementById("result").innerHTML + "<br>pushState";
+</script>

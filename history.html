@@ -13,6 +13,8 @@ history.pushState({page: 2}, "page 2", "history2.html");
 
 setInterval(function(){ 
     history.pushState({page: 2}, "page 3", "history3.html"); 
+    document.getElementById("result").innerHTML = 
+        document.getElementById("result").innerHTML + "<br>page 3";
 }, 3000);
 
 document.getElementById("result").innerHTML = 

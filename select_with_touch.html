@@ -1,14 +1,17 @@
 <!doctype html>
 <body>
 <select><option>first</option><option disabled>second</option><option selected dir="rtl" title="tooltip" aria-label="aria">third</option></select>
+<input id="clearBtn" type="button" onclick="fnClear();" value="clear"/>
 <div id="result"></div>
 <script>
-document.addEventListener("touchstart", function() { document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchstart<br/>"; });
-  document.addEventListener("touchmove", function() { document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchmove<br/>"; });
-  document.addEventListener("touchend", function() { document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchend<br/>"; });
 
-function myTouchStart() {
-  document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchStart<br/>";
+document.addEventListener("touchstart", function() { document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchstart<br/>"; });
+document.addEventListener("touchmove", function() { document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchmove<br/>"; });
+document.addEventListener("touchend", function() { document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "touchend<br/>"; });
+document.getElementById("clearBtn").addEventListener("touchend", function() {document.getElementById("result").innerHTML = "clear called2<br/>";});
+
+function fnClear() {
+  document.getElementById("result").innerHTML = "clear called<br/>";
 }
 </script>
 </body>

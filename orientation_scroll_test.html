@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orientation Scroll Test</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body {
+    background: #f4f4f4;
+  }
+
+  .info {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 13px;
+    border-radius: 4px;
+    z-index: 100;
+  }
+
+  .content {
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .box {
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+    color: #fff;
+    padding: 20px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+
+  /* Portrait: 짧은 컨텐츠 → 스크롤 없음 */
+  @media (orientation: portrait) {
+    .content {
+      height: 300px;
+    }
+    .box.landscape-only {
+      display: none;
+    }
+    body::before {
+      content: "Portrait (스크롤 없음)";
+    }
+  }
+
+  /* Landscape: 긴 컨텐츠 → 스크롤 발생 */
+  @media (orientation: landscape) {
+    .content {
+      height: 1500px;
+    }
+    body::before {
+      content: "Landscape (스크롤 있음)";
+    }
+  }
+
+  body::before {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    padding: 6px 10px;
+    background: rgba(220, 53, 69, 0.9);
+    color: #fff;
+    font-size: 13px;
+    border-radius: 4px;
+    z-index: 100;
+  }
+</style>
+</head>
+<body>
+  <div class="info" id="info"></div>
+
+  <div class="content">
+    <div class="box">박스 1 — 항상 표시</div>
+    <div class="box">박스 2 — 항상 표시</div>
+    <div class="box">박스 3 — 항상 표시</div>
+    <div class="box landscape-only">박스 4 — Landscape 전용</div>
+    <div class="box landscape-only">박스 5 — Landscape 전용</div>
+    <div class="box landscape-only">박스 6 — Landscape 전용</div>
+    <div class="box landscape-only">박스 7 — Landscape 전용</div>
+    <div class="box landscape-only">박스 8 — Landscape 전용</div>
+    <div class="box landscape-only">박스 9 — Landscape 전용</div>
+    <div class="box landscape-only">박스 10 — 마지막 박스 (Landscape에서 스크롤해야 보임)</div>
+  </div>
+
+<script>
+  function update() {
+    const info = document.getElementById('info');
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const orientation = w > h ? 'landscape' : 'portrait';
+    const docH = document.documentElement.scrollHeight;
+    const scrollable = docH > h;
+    info.textContent = `${w}×${h} / doc:${docH} / ${scrollable ? '스크롤O' : '스크롤X'}`;
+  }
+  window.addEventListener('resize', update);
+  window.addEventListener('orientationchange', () => setTimeout(update, 100));
+  update();
+</script>
+</body>
+</html>

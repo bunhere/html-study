@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Long Capture Test · fixed/sticky</title>
+<style>
+  :root { --row-h: 120px; --rows: 160; }   /* 총 높이 ≈ rows * row-h ≈ 19,200px */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; }
+  body {
+    font-family: -apple-system, "Roboto", sans-serif;
+    /* 전체 높이를 가로지르는 그라데이션 → 밴드 이음매(seam)·톤 끊김 감지용 */
+    background: linear-gradient(180deg,
+      #ff5252 0%, #ffb142 20%, #fffa65 40%,
+      #32ff7e 60%, #18dcff 80%, #7d5fff 100%);
+    color: #111;
+  }
+
+  /* ───── position: fixed 요소들 ─────
+     풀페이지 캡쳐에서 1) 한 번만 나오는지 2) 밴드마다 반복되는지
+     3) 어느 좌표에 박히는지 확인. 반투명이라 뒤 콘텐츠가 비쳐 위치 판별 쉬움. */
+  .fixed-top {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px;
+    background: rgba(0,0,0,.78); color: #fff;
+    display: flex; align-items: center; padding: 0 16px;
+    font-weight: 700; z-index: 100;
+  }
+  .fixed-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 48px;
+    background: rgba(20,40,120,.85); color: #fff;
+    display: flex; align-items: center; padding: 0 16px; z-index: 100;
+  }
+  .fixed-fab {
+    position: fixed; right: 16px; bottom: 64px; width: 64px; height: 64px;
+    border-radius: 50%; background: #e84393; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4); z-index: 101;
+  }
+  .fixed-rail {
+    position: fixed; left: 0; top: 30%; width: 22px; height: 40%;
+    background: rgba(0,0,0,.55); color: #fff; writing-mode: vertical-rl;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; letter-spacing: 2px; z-index: 99;
+  }
+
+  /* ───── position: sticky 요소 ─────
+     스크롤 캡쳐에서 섹션 헤더가 각 섹션 상단에 제대로 따라붙는지 확인. */
+  .section { padding-bottom: 8px; }
+  .sticky-head {
+    position: sticky; top: 56px;          /* fixed-top 높이만큼 내려서 */
+    background: #111; color: #fff;
+    padding: 10px 16px; font-weight: 700; z-index: 50;
+    border-top: 3px solid #fff;
+  }
+
+  /* ───── 본문 행 + 절대 Y 좌표 눈금 ───── */
+  .row {
+    height: var(--row-h);
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px 0 40px;
+    border-bottom: 1px dashed rgba(0,0,0,.25);
+  }
+  .row .idx {
+    font-variant-numeric: tabular-nums; font-weight: 700;
+    background: rgba(255,255,255,.7); padding: 4px 8px; border-radius: 6px;
+    min-width: 96px; text-align: center;
+  }
+  .row .ruler {
+    font-variant-numeric: tabular-nums; font-size: 13px;
+    background: #111; color: #0f0; padding: 3px 8px; border-radius: 4px;
+  }
+  .row .bar {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: repeating-linear-gradient(90deg,#111 0 20px,#fff 20px 40px);
+  }
+  /* 100px마다 가로 기준선(밴드 경계가 이 선을 어긋나게 자르면 seam) */
+  .ruleline { height: 0; border-top: 2px solid rgba(0,0,0,.9); }
+  .tall-img {
+    height: 600px; margin: 12px 16px; border-radius: 10px;
+    background: conic-gradient(from 0deg, #fff, #000, #fff);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 22px; font-weight: 800; color:#e84393;
+    mix-blend-mode: difference;
+  }
+</style>
+</head>
+<body>
+  <header class="fixed-top" id="topbar">FIXED TOP · 스크롤해도 화면 상단 고정</header>
+  <nav class="fixed-rail">FIXED LEFT RAIL</nav>
+  <div class="fixed-fab" id="fab">FAB<br>fixed</div>
+  <footer class="fixed-bottom" id="botbar">FIXED BOTTOM · scrollY = <span id="sy">0</span></footer>
+
+  <main id="content"><!-- JS로 채움 --></main>
+
+  <script>
+    const ROWS = parseInt(getComputedStyle(document.documentElement)
+                  .getPropertyValue('--rows')) || 160;
+    const ROW_H = 120;
+    const SECTION_EVERY = 12;          // 12행마다 sticky 섹션 헤더
+    const main = document.getElementById('content');
+    let html = '';
+    let globalY = 0;                   // 페이지 절대 Y(대략, 헤더 높이는 무시한 근사)
+
+    for (let i = 0; i < ROWS; i++) {
+      if (i % SECTION_EVERY === 0) {
+        html += `<div class="sticky-head">STICKY 섹션 #${i / SECTION_EVERY + 1} · top:56px 에 붙음</div>`;
+      }
+      const approxY = i * ROW_H;
+      html += `<div class="row">
+        <span class="idx">ROW ${String(i).padStart(3,'0')}</span>
+        <span class="ruler">Y≈${approxY}px</span>
+        <span class="bar"></span>
+      </div>`;
+      // 중간에 큰 요소 하나 넣어 밴드 1개보다 큰 콘텐츠 처리 확인
+      if (i === Math.floor(ROWS / 2)) {
+        html += `<div class="tall-img">TALL 600px BLOCK · 밴드보다 큰 단일 요소</div>`;
+      }
+    }
+    main.innerHTML = html;
+
+    // 고정요소가 캡쳐에서 갱신되는 scrollY 값을 들고 있는지 확인용
+    const sy = document.getElementById('sy');
+    addEventListener('scroll', () => { sy.textContent = Math.round(scrollY); }, {passive:true});
+
+    // 총 문서 높이 콘솔 출력
+    requestAnimationFrame(() => {
+      console.log('document height =', document.documentElement.scrollHeight, 'px');
+    });
+  </script>
+</body>
+</html>

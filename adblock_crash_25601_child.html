@@ -16,4 +16,24 @@
   <p>이 탭은 <span id="count">15</span>초 후 스스로 닫힙니다.</p>
   <p>지금 <b>3dot → 광고 차단</b>으로 바텀시트를 여세요.
   카운트가 0이 되면 이 탭이 닫히고(WebContents 파괴),
-  그 뒤 시
+  그 뒤 시트를 닫으면(바깥 탭/스와이프) <code>isDestroyed()</code>
+  미가드로 크래시가 발생합니다.</p>
+</div>
+<script>
+  // window.open 으로 열린 탭만 스크립트로 window.close() 가능하다.
+  var remaining = 15;
+  var el = document.getElementById('count');
+  var timer = setInterval(function () {
+    remaining -= 1;
+    if (remaining > 0) {
+      el.textContent = remaining;
+      return;
+    }
+    el.textContent = 0;
+    clearInterval(timer);
+    // WebContents 파괴 트리거.
+    window.close();
+  }, 1000);
+</script>
+</body>
+</html>

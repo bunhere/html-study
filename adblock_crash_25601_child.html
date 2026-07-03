@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whale-bug #25601 repro — child (self-closing)</title>
+<style>
+  body { font-family: sans-serif; padding: 24px; line-height: 1.6; }
+  #count { font-size: 48px; font-weight: bold; color: #c00; }
+  .box { border: 2px solid #ccc; border-radius: 8px; padding: 16px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h2>whale-bug #25601 재현 — 자식 탭</h2>
+<div class="box">
+  <p>이 탭은 <span id="count">15</span>초 후 스스로 닫힙니다.</p>
+  <p>지금 <b>3dot → 광고 차단</b>으로 바텀시트를 여세요.
+  카운트가 0이 되면 이 탭이 닫히고(WebContents 파괴),
+  그 뒤 시

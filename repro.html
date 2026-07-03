@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OOF CHECK(layer) repro — anchor-positioned fixed tooltip</title>
+<style>
+  body { margin: 0; height: 4000px; }             /* 스크롤 가능 (fixed+anchor 컨텍스트) */
+  .trigger {
+    position: relative;
+    display: inline-block;
+    margin: 40px;
+    width: 60px; height: 24px;
+    background: #c33; color: #fff; font: 12px sans-serif; text-align: center;
+  }
+  .tip {
+    position: fixed;                 /* OOF, 보통 self-painting layer 필요 */
+    top: anchor(bottom);
+    left: anchor(left);
+    background: #111; color: #fff; font: 12px sans-serif; padding: 4px 6px;
+    /* position-visibility 는 일부러 쓰지 않음 (실제 크래시 케이스와 동일) */
+  }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script>
+// Floating-UI/Radix 툴팁 패턴 최소화:
+//  - anchor-name 트리거 + position:fixed / position-anchor 툴팁을 동적 삽입
+//  - 삽입 직후 같은 태스크에서 getComputedStyle 로 강제 동기 레이아웃
+//    (레이어 생성 이전 창에 OOF 레이아웃을 태워 CHECK(layer) 유발 시도)
+let n = 0;
+function spawnAndMeasure(count) {
+  const host = document.getElementById('host');
+  for (let i = 0; i < count; i++) {
+    const id = 'a' + (n++);
+    const trig = document.createElement('div');
+    trig.className = 'trigger';
+    trig.style.setProperty('anchor-name', '--' + id);
+    trig.textContent = 'trg';
+
+    const tip = document.createElement('div');
+    tip.className = 'tip';
+    tip.style.setProperty('position-anchor', '--' + id);
+    tip.id = 'tip-' + id;
+    tip.textContent = 'tip';
+
+    host.appendChild(trig);
+    host.appendChild(tip);
+
+    // 삽입 직후 동기 측정 → 강제 레이아웃 (레이어 생성 전 창 노림)
+    getComputedStyle(tip).getPropertyValue('top');
+    getComputedStyle(tip).getPropertyValue('inset');
+    // 컨테이닝 블록(fixed → LayoutView) 쪽으로도 강제 레이아웃
+    getComputedStyle(document.documentElement).getPropertyValue('height');
+  }
+}
+
+// 반복 삽입/측정 + 제거로 레이어 생성 레이스 창을 넓힘
+function cycle() {
+  spawnAndMeasure(30);
+  // 다음 프레임에 정리하고 다시 삽입 (append→measure→remove 반복)
+  requestAnimationFrame(() => {
+    document.getElementById('host').textContent = '';
+    getComputedStyle(document.body).getPropertyValue('height'); // 강제 레이아웃
+    requestAnimationFrame(cycle);
+  });
+}
+cycle();
+</script>
+</body>
+</html>

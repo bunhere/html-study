@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whale-bug #25601 repro — opener</title>
+<style>
+  body { font-family: sans-serif; padding: 24px; line-height: 1.6; }
+  button { font-size: 20px; padding: 16px 24px; margin-top: 16px; }
+  .box { border: 2px solid #ccc; border-radius: 8px; padding: 16px; margin-top: 16px; }
+  code { background:#eee; padding:2px 4px; border-radius:4px; }
+</style>
+</head>
+<body>
+<h2>w-bug #25601 재현 — 부모 탭</h2>
+<div class="box">
+  <p>버튼을 누르면 <b>자식 탭</b>(<code>adblock_crash_25601_child.html</code>)이
+  <code>window.open</code> 으로 열립니다. 자식 탭은 열린 뒤 15초 후
+  <code>window.close()</code> 로 스스로 닫히며 WebContents 가 파괴됩니다.</p>
+  <p>순서: <b>① 버튼 탭 → ② 자식 탭으로 전환 → ③ 3dot→광고 차단 시트 열기
+  → ④ 카운트다운 0 → 탭 닫힘 → ⑤ 시트 닫기(바깥 탭/스와이프)</b> → 크래시.</p>
+</div>
+<button id="open">자식 탭 열기</button>
+<script>
+  // 사용자 제스처(클릭)로 열어야 팝업 차단 없이 새 탭으로 열린다.
+  document.getElementById('open').onclick = () =>
+      window.open('adblock_crash_25601_child.html', '_blank');
+</script>
+</body>
+</html>

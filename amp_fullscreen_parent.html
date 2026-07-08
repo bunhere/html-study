@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AMP-like Fullscreen Parent</title>
+<style>
+  /* Root/body must NOT scroll: this is the key of the AMP-viewer scenario.
+     The whole viewport is filled by a single iframe, and only the iframe's
+     child document scrolls (AMP "iframeScroll" mode). Because the root frame
+     never scrolls, browser controls (the omnibox) are never asked to show. */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;          /* root cannot scroll */
+    background: #202124;
+  }
+  #viewer {
+    position: fixed;           /* pin to the layout viewport */
+    inset: 0;                  /* top/right/bottom/left = 0 -> 100% x 100% */
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+  }
+  /* A small non-scrolling badge so it's obvious this is the PARENT/root. */
+  #badge {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    font: 12px/1.4 -apple-system, Roboto, system-ui, sans-serif;
+    color: #fff;
+    background: rgba(217, 48, 37, .92);
+    padding: 6px 10px;
+    border-radius: 8px;
+    pointer-events: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+</style>
+</head>
+<body>
+  <div id="badge">PARENT (root · 스크롤 불가)</div>
+  <!-- Child fills 100% of the viewport. Default src is the sibling child page.
+       Override with ?src=<url> to point at a cross-origin host (OOPIF). -->
+  <iframe id="viewer"
+          referrerpolicy="no-referrer-when-downgrade"
+          scrolling="yes"
+          src="amp_fullscreen_child.html"></iframe>
+  <script>
+    // Allow ?src=https://other-host/child.html to force a cross-origin (OOPIF)
+    // child, which reproduces the real AMP viewer's separate-process iframe.
+    const params = new URLSearchParams(location.search);
+    const src = params.get('src');
+    if (src) document.getElementById('viewer').src = src;
+  </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AMP-like Scrollable Child</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    font: 16px/1.6 -apple-system, Roboto, system-ui, sans-serif;
+    color: #202124;
+    background: #fff;
+  }
+  /* Sticky HUD showing this document's own scroll position, to prove that the
+     CHILD scrolls internally while the parent/root stays fixed. */
+  #hud {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #1a73e8;
+    color: #fff;
+    padding: 12px 16px;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+  }
+  section {
+    padding: 28px 20px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  section:nth-child(even) { background: #f5f7fa; }
+  h2 { margin: 0 0 8px; }
+  p  { margin: 0; color: #5f6368; }
+  .tall { height: 60vh; display: flex; align-items: center; justify-content: center;
+          font-size: 22px; color: #9aa0a6; }
+</style>
+</head>
+<body>
+  <div id="hud">CHILD (iframe 내부 · scrollY = <span id="y">0</span>px)</div>
+  <section><h2>맨 위 (top)</h2><p>여기서부터 아래로 스크롤하세요. 이 문서만 스크롤되고 상단 주소창/부모 페이지는 움직이지 않아야 합니다.</p></section>
+  <script>
+    // Generate a long body so the child is clearly scrollable.
+    const body = document.body;
+    for (let i = 1; i <= 20; i++) {
+      const s = document.createElement('section');
+      s.innerHTML =
+        '<h2>블록 ' + i + '</h2>' +
+        '<p>스크롤 테스트용 더미 콘텐츠입니다. 부모 iframe 은 100% 로 고정되어 있고, ' +
+        '이 child 문서 내부에서만 스크롤이 일어납니다.</p>' +
+        '<div class="tall">— 블록 ' + i + ' 영역 —</div>';
+      body.appendChild(s);
+    }
+    const bottom = document.createElement('section');
+    bottom.innerHTML = '<h2>맨 아래 (bottom)</h2><p>끝입니다.</p>';
+    body.appendChild(bottom);
+
+    // Report scroll position so it's visually obvious the child scrolls.
+    const y = document.getElementById('y');
+    addEventListener('scroll', () => { y.textContent = Math.round(scrollY); },
+                     { passive: true });
+  </script>
+</body></html>

@@ -62,7 +62,7 @@
 <body>
   <h1>Text Autosizing 진단</h1>
   <p class="sub">각 브라우저에서 이 페이지를 그대로 열어 결과를 비교하세요. 폭 실측 기반이라 Chromium·Firefox 모두 유효합니다.</p>
-  <div id="useragent"></div>
+
   <div id="verdict" class="verdict">측정 중…</div>
 
   <div class="card">
@@ -186,7 +186,6 @@
   document.getElementById('remeasure').addEventListener('click', measure);
   window.addEventListener('load', measure);
   window.addEventListener('resize', measure);
-  document.getElementById('useragent').innerHTML = navigator.userAgent;
 </script>
 </body>
 </html>

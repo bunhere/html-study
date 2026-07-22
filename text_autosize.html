@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 실제 모바일 페이지 조건: device-width 뷰포트. 이 상태의 부스트 = FSM(device_scale_adjustment) 기반 오토사이징 -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text Autosizing 진단 (Whale/Chrome/Samsung/Firefox)</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    font-family: -apple-system, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    line-height: 1.5; background: #fff; color: #111;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #16181c; color: #e7e9ee; }
+    .card { background: #21242b !important; border-color: #333 !important; }
+    th { background: #2a2e37 !important; }
+    code { background: #2a2e37; }
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { font-size: 13px; opacity: .7; margin: 0 0 16px; }
+  .verdict {
+    font-size: 22px; font-weight: 800; text-align: center;
+    padding: 18px; border-radius: 12px; margin: 0 0 16px;
+    background: #eee; color: #333;
+  }
+  .verdict.on  { background: #16a34a; color: #fff; }
+  .verdict.off { background: #64748b; color: #fff; }
+  .verdict small { display:block; font-size: 13px; font-weight: 500; opacity:.9; margin-top:6px; }
+  .card {
+    background: #f7f8fa; border: 1px solid #e2e5ea; border-radius: 10px;
+    padding: 12px 14px; margin: 0 0 14px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e5ea; }
+  th { background: #eef1f5; font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:20px; font-size:12px; font-weight:700; }
+  .tag.on { background:#dcfce7; color:#166534; }
+  .tag.off{ background:#e2e8f0; color:#475569; }
+  button {
+    font-size: 15px; padding: 10px 18px; border: 0; border-radius: 8px;
+    background: #2563eb; color: #fff; font-weight: 600; width: 100%;
+  }
+  code { padding: 1px 5px; border-radius: 4px; background: #e8ebf0; font-size: 12px; }
+  .note { font-size: 12px; opacity: .75; }
+
+  /* ── 측정용 블록. auto/none/short 세 블록 내용·CSS 동일, text-size-adjust만 다름 ── */
+  .measure { font-size: 12px; overflow: hidden; border:1px dashed #cbd5e1; border-radius:8px; padding:8px; margin-bottom:8px; }
+  .measure.auto  { -webkit-text-size-adjust: auto; text-size-adjust: auto; }   /* 부스팅 허용(기본) */
+  .measure.none  { -webkit-text-size-adjust: none; text-size-adjust: none; }   /* 부스팅 차단(기준선) */
+  .measure.short { -webkit-text-size-adjust: auto; text-size-adjust: auto; }
+  .probe { white-space: nowrap; font-weight: 700; }
+  .side { display:flex; gap:8px; }
+  .side > div { flex:1; min-width:0; }
+  .side .cap { font-size:11px; font-weight:700; opacity:.6; margin-bottom:2px; }
+</style>
+</head>
+<body>
+  <h1>Text Autosizing 진단</h1>
+  <p class="sub">각 브라우저에서 이 페이지를 그대로 열어 결과를 비교하세요. 폭 실측 기반이라 Chromium·Firefox 모두 유효합니다.</p>
+
+  <div id="verdict" class="verdict">측정 중…</div>
+
+  <div class="card">
+    <h2>측정 결과</h2>
+    <table>
+      <thead>
+        <tr><th>항목</th><th class="num">실측 폭(px)</th><th class="num">기준 대비</th><th class="num">computed<br>font-size</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note" style="margin-top:8px">
+      · <b>긴 텍스트(auto)</b> ÷ <b>긴 텍스트(none)</b> = 오토사이징 배율. <code>1.00</code>이면 꺼짐, <code>&gt;1</code>이면 켜짐.<br>
+      · <b>짧은 텍스트(auto)</b>가 기준(1.00) 근처면 "4줄 이상" 게이트가 정상 동작(짧은 텍스트는 미부스트)한다는 뜻.<br>
+      · 실측 폭 비율이 진짜 신호입니다. Firefox는 computed font-size에 인플레이션이 안 잡히므로 폭으로 판정하세요.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>환경</h2>
+    <table><tbody id="env"></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>눈으로 비교</h2>
+    <div class="side">
+      <div><div class="cap">auto(부스팅 허용)</div><div id="visAuto" class="measure auto"></div></div>
+      <div><div class="cap">none(부스팅 차단)</div><div id="visNone" class="measure none"></div></div>
+    </div>
+    <p class="note">두 칸의 글자 크기가 다르면 오토사이징이 켜진 것입니다. 같으면 꺼짐.</p>
+  </div>
+
+  <!-- 측정 전용(화면 밖). 각 블록은 "4줄 이상" 임계 통과용 충분한 텍스트 + 폭 프로브 span 포함 -->
+  <div style="position:absolute; left:-99999px; top:0; width:100%;" aria-hidden="true">
+    <div id="mAuto"  class="measure auto"></div>
+    <div id="mNone"  class="measure none"></div>
+    <div id="mShort" class="measure short"></div>
+  </div>
+
+  <button id="remeasure">다시 측정</button>
+
+<script>
+  var PROBE = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; // 30 chars — 폭 차이 증폭
+  var FILLER = ("웨일 브라우저 텍스트 오토사이징 측정용 문단입니다. This paragraph exists only to exceed the four-line minimum that text autosizing requires before it inflates a block. 넉넉한 분량의 본문을 넣어 클러스터가 오토사이즈 대상이 되도록 만듭니다. ").repeat(6);
+
+  function fill(el, withProbe) {
+    var html = FILLER + (withProbe ? ' <span class="probe">' + PROBE + '</span> ' : '') + FILLER;
+    el.innerHTML = html;
+  }
+  function fillShort(el) {
+    // 짧은 텍스트(임계 미달) + 프로브
+    el.innerHTML = '짧은 텍스트 <span class="probe">' + PROBE + '</span>';
+  }
+
+  function probeWidth(container) {
+    var p = container.querySelector('.probe');
+    return p ? p.getBoundingClientRect().width : 0;
+  }
+  function probeFontPx(container) {
+    var p = container.querySelector('.probe');
+    return p ? parseFloat(getComputedStyle(p).fontSize) : 0;
+  }
+
+  function fnum(x, d) { return (x === 0 || isNaN(x)) ? "—" : x.toFixed(d === undefined ? 2 : d); }
+
+  function measure() {
+    fill(document.getElementById('mAuto'), true);
+    fill(document.getElementById('mNone'), true);
+    fillShort(document.getElementById('mShort'));
+    fill(document.getElementById('visAuto'), false);
+    fill(document.getElementById('visNone'), false);
+
+    // 폰트 로드/레이아웃 안정화 후 측정
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      var wAuto  = probeWidth(document.getElementById('mAuto'));
+      var wNone  = probeWidth(document.getElementById('mNone'));
+      var wShort = probeWidth(document.getElementById('mShort'));
+      var fAuto  = probeFontPx(document.getElementById('mAuto'));
+      var fNone  = probeFontPx(document.getElementById('mNone'));
+      var fShort = probeFontPx(document.getElementById('mShort'));
+
+      var ratioLong  = wNone ? wAuto  / wNone : 0;
+      var ratioShort = wNone ? wShort / wNone : 0;
+      var csRatio    = fNone ? fAuto  / fNone : 0;
+
+      var rows = document.getElementById('rows');
+      function row(name, w, ratio, fpx, showRatio) {
+        return '<tr><td>' + name + '</td>' +
+               '<td class="num">' + fnum(w,1) + '</td>' +
+               '<td class="num">' + (showRatio ? '×' + fnum(ratio) : '기준') + '</td>' +
+               '<td class="num">' + fnum(fpx,1) + '</td></tr>';
+      }
+      rows.innerHTML =
+        row('긴 텍스트 · none (기준선)', wNone, 1, fNone, false) +
+        row('긴 텍스트 · auto', wAuto, ratioLong, fAuto, true) +
+        row('짧은 텍스트 · auto', wShort, ratioShort, fShort, true);
+
+      var on = ratioLong > 1.01;
+      var v = document.getElementById('verdict');
+      v.className = 'verdict ' + (on ? 'on' : 'off');
+      v.innerHTML = (on ? '오토사이징: 켜짐 ✔' : '오토사이징: 꺼짐 ✘') +
+        '<small>긴 텍스트 부스트 배율 ×' + fnum(ratioLong) +
+        ' · 짧은 텍스트 ×' + fnum(ratioShort) +
+        (csRatio > 1.01 ? ' · computed에도 반영(Chromium형)' : ' · computed 미반영(Firefox형이거나 꺼짐)') +
+        '</small>';
+
+      // 환경
+      var vv = window.visualViewport;
+      var env = [
+        ['window.innerWidth',  window.innerWidth + ' px'],
+        ['screen.width × dpr', screen.width + ' × ' + window.devicePixelRatio + ' = ' + Math.round(screen.width*window.devicePixelRatio) + ' 물리px'],
+        ['visualViewport',     vv ? Math.round(vv.width) + ' × ' + Math.round(vv.height) : '없음'],
+        ['devicePixelRatio',   String(window.devicePixelRatio)],
+        ['userAgent',          navigator.userAgent]
+      ];
+      document.getElementById('env').innerHTML = env.map(function(e){
+        return '<tr><td style="white-space:nowrap">' + e[0] + '</td><td style="word-break:break-all">' + e[1] + '</td></tr>';
+      }).join('');
+    }); });
+  }
+
+  document.getElementById('remeasure').addEventListener('click', measure);
+  window.addEventListener('load', measure);
+  window.addEventListener('resize', measure);
+</script>
+</body>
+</html>

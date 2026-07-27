@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Missed fixed-pos OOF repro v2 (whale-bug #25867 / #25595)</title>
+<!--
+  v2. Why v1 (repro_oof_anchor_position_try.html) could not crash:
+
+  PrePaintTreeWalk::Walk() erases the fragment from pending_missables_ at its
+  very top (pre_paint_tree_walk.cc:1327-1338), BEFORE the early-out. So an OOF
+  only stays "missed" if Walk() is never called on it at all -- i.e. an
+  ANCESTOR is pruned by:
+
+      // pre_paint_tree_walk.cc:1349
+      if (!needs_tree_builder_context_update && !ObjectRequiresPrePaint(object)
+          && !ContextRequiresChildPrePaint(parent_context))
+        return;
+
+  v1 dirtied the whole document every frame, so nothing was ever pruned,
+  WalkMissedChildren() never had work, and RebuildContextForMissedDescendant()
+  was never reached.
+
+  What v2 arranges:
+
+  (a) DIVERGENCE between the fragment tree and the LayoutObject tree.
+      #cb has will-change:transform, so it is the containing block for
+      fixed-pos descendants -> the tooltip's fragment is an OOF child of
+      #cb's fragment, while in the LayoutObject tree the tooltip sits several
+      levels below, under .boundary. CollectMissableChildren() runs on #cb.
+      (The site does this too: da CSS has will-change:transform,opacity and
+       backdrop-filter:blur(), 208 transform: rules.)
+
+  (b) PRUNING. Only #cb is dirtied in the "missed" frame; the tooltip subtree
+      is left completely untouched, so Walk() prunes at .boundary and the
+      tooltip fragment survives in pending_missables_.
+
+  (c) RELAYOUT BOUNDARY. .boundary is position:relative;z-index:0 (self-
+      painting layer) with a fixed size, so removing the tooltip marks only
+      that subtree for layout. #cb can then keep an OLDER GENERATION fragment
+      whose OOF child link still points at the now-destroyed tooltip box.
+      That stale link is exactly what LayoutBox::DisassociatePhysicalFragments()
+      does NOT clear (it only walks layout_results_/measure_cache_).
+
+  (d) The tooltip CSS itself is copied from deviantart (position:fixed +
+      position-area + position-try-fallbacks + @position-try). No
+      position-visibility, matching the #25595 log (posVis_*=0).
+
+  Expected: SIGSEGV @0x28 in PrePaintTreeWalk::WalkMissedChildren (#25867),
+            SIGSEGV @0x9  in CullRectUpdater::PaintPropertiesChanged,
+            or SIGTRAP CHECK(layer) in UpdatePositionVisibilityAfterLayout.
+-->
+<style>
+  html, body { margin: 0; height: 100%; font: 13px/1.4 system-ui, sans-serif; }
+  #log { position: fixed; right: 0; bottom: 0; z-index: 999; background: #000c;
+         color: #0f0; padding: 4px 8px; font-family: monospace; }
+
+  /* (a) containing block for fixed-pos descendants */
+  #cb {
+    will-change: transform;
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+  }
+
+  /* (c) relayout boundary: self-painting layer + fixed size */
+  .boundary {
+    position: relative;
+    z-index: 0;
+    width: 220px;
+    height: 56px;
+    overflow: hidden;
+    display: inline-block;
+    margin: 2px;
+    border: 1px solid #ccc;
+  }
+  .d { padding: 1px; }   /* nesting depth between .boundary and the tooltip */
+
+  .trigger {
+    display: inline-flex; padding: 4px 8px; border: 1px solid #888;
+    border-radius: 4px; background: #eee; white-space: nowrap;
+  }
+
+  /* (d) tooltip -- structure from da-browse styles.cd7c39b4ed.css */
+  .tooltip {
+    z-index: 30;
+    visibility: hidden;
+    position: fixed;
+    opacity: 0;
+    pointer-events: none;
+    position-try-fallbacks: flip-block, flip-inline;
+    --tooltip-arrow-size: 6px;
+    width: max-content;
+    transition: visibility, opacity;
+
+    position-area: bottom;
+    justify-self: anchor-center;
+
+    background: #222; color: #fff; padding: 4px 8px; border-radius: 4px;
+  }
+  .tooltip.shown { visibility: visible; opacity: 1; pointer-events: auto; }
+  .tooltip.custom { position-try-fallbacks: --flip-to-top, --flip-to-right, --flip-to-left; }
+
+  @position-try --flip-to-bottom { position-area: bottom; margin-top: -1px; }
+  @position-try --flip-to-top {
+    position-area: top;
+    margin-bottom: calc(var(--tooltip-arrow-size) + var(--tooltip-offset-distance, 0px));
+    margin-top: -2px;
+  }
+  @position-try --flip-to-right {
+    position-area: right;
+    margin-left: calc(var(--tooltip-arrow-size) + var(--tooltip-offset-distance, 0px));
+    margin-top: -3px;
+  }
+  @position-try --flip-to-left {
+    position-area: left;
+    margin-right: calc(var(--tooltip-arrow-size) + var(--tooltip-offset-distance, 0px));
+    margin-top: -4px;
+  }
+</style>
+
+<div id="cb"></div>
+<div id="log">starting…</div>
+
+<script>
+const N = 12;            // tooltips per cycle
+const DEPTH = 4;         // nesting levels between .boundary and the tooltip
+const cb = document.getElementById('cb');
+const logEl = document.getElementById('log');
+
+let seq = 0, cycles = 0;
+let live = [];
+
+function build() {
+  live = [];
+  for (let i = 0; i < N; i++) {
+    const boundary = document.createElement('div');
+    boundary.className = 'boundary';
+
+    // deep nesting so that pruning at .boundary really hides the tooltip
+    let host = boundary;
+    for (let d = 0; d < DEPTH; d++) {
+      const n = document.createElement('div');
+      n.className = 'd';
+      host.appendChild(n);
+      host = n;
+    }
+
+    const id = '_R_' + (seq++).toString(36) + 'tva8q';
+    const trigger = document.createElement('span');
+    trigger.className = 'trigger';
+    trigger.style.anchorName = '--a' + id;
+    trigger.textContent = 'trigger ' + i;
+
+    const tip = document.createElement('div');
+    tip.className = 'tooltip' + (i % 2 ? ' custom' : '');
+    tip.id = 'tooltip-' + id;
+    tip.style.positionAnchor = '--a' + id;
+    tip.textContent = 'tooltip ' + i + ' — some reasonably long text';
+
+    host.append(trigger, tip);
+    cb.appendChild(boundary);
+    live.push({ boundary, trigger, tip, host });
+  }
+}
+
+// Forced synchronous layout from a timer + microtask -- the #25595 stack:
+// DOMTimer::Fired -> RunPendingMicrotask -> getComputedStyle ->
+// UpdateStyleAndLayoutTreeForElement -> OutOfFlowLayoutPart.
+function forceLayout(el) {
+  if (!el || !el.isConnected) return;
+  getComputedStyle(el).insetBlockStart;
+  getComputedStyle(el).marginTop;
+  void el.offsetTop;
+}
+
+function raf() { return new Promise(r => requestAnimationFrame(r)); }
+function timer() { return new Promise(r => setTimeout(r, 0)); }
+
+async function cycle() {
+  // ---- phase 1: mount + show. Everything is dirty here; that is fine, this
+  // frame is only about getting fragments built and the try-fallback loop run.
+  build();
+  live.forEach(({ tip }) => tip.classList.add('shown'));
+  await timer();
+  live.forEach(({ tip }) => forceLayout(tip));
+  await raf();
+
+  // ---- phase 2: settle. Touch nothing, so every paint flag clears.
+  await raf();
+  await raf();
+
+  // ---- phase 3: dirty ONLY the containing block. The tooltip subtree stays
+  // clean -> Walk() prunes at .boundary -> the tooltip fragment stays in
+  // pending_missables_ -> WalkMissedChildren() -> RebuildContextForMissedDescendant().
+  cb.style.transform = 'translateZ(0) rotate(' + ((cycles % 7) * 0.0001) + 'deg)';
+  forceLayout(cb);
+  await raf();
+
+  // ---- phase 4: destroy the tooltips from inside the relayout boundary,
+  // then immediately re-dirty the containing block and force layout in the
+  // same turn, so pre-paint runs while #cb may still hold an older-generation
+  // fragment referencing the destroyed boxes.
+  live.forEach(({ tip, host }, i) => {
+    if (i % 3 === 0)       tip.remove();
+    else if (i % 3 === 1)  host.replaceChildren();     // drops trigger + tooltip
+    else                   tip.replaceWith(document.createTextNode(''));
+  });
+  cb.style.transform = 'translateZ(0) rotate(' + ((cycles % 7) * 0.0001 + 0.00005) + 'deg)';
+  forceLayout(cb);
+  await raf();
+
+  // ---- teardown: remove everything (v1 leaked wrappers here, which is why it
+  // just got slower and slower).
+  live.forEach(({ boundary }) => boundary.remove());
+  live = [];
+
+  cycles++;
+  logEl.textContent = 'cycles: ' + cycles;
+  requestAnimationFrame(cycle);
+}
+
+// Keep the LayoutView overflow clip changing: CullRectUpdater::
+// PaintPropertiesChanged only walks LayoutView's fixed-positioned fragment
+// children when the overflow clip node actually changed.
+let h = 0;
+setInterval(() => {
+  h = (h + 1) % 40;
+  document.body.style.minHeight = (2000 + h * 25) + 'px';
+}, 50);
+
+cycle();
+</script>

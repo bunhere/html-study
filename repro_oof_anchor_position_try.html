@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OOF anchored tooltip repro (whale-bug #25595 / #25867)</title>
+<!--
+  Mirrors the real trigger found on www.deviantart.com
+  (static.parastorage.com/services/da-browse/dist/css/styles.cd7c39b4ed.css):
+
+      .euhfSw { z-index:30; visibility:hidden; position:fixed;
+                opacity:0; pointer-events:none;
+                position-try-fallbacks:flip-block,flip-inline;
+                --tooltip-arrow-size:6px; width:max-content;
+                transition:visibility,opacity }
+      .IK30Nu { position-area:bottom; justify-self:anchor-center;
+                position-try-fallbacks:--flip-to-top }
+      @position-try --flip-to-top { position-area:top; margin-bottom:...; margin-top:-2px }
+
+  Ingredients that the previous repro (repro_oof_check_layer.html) was missing:
+    1. position-try-fallbacks  -> drives OOFCandidateStyleIterator, which calls
+       SetStyle(..., ApplyStyleChanges::kNo) *during layout*
+       (out_of_flow_layout_part.cc ActivateBaseStyleForTryAttempt /
+        ActivateStyleForChosenFallback)
+    2. unmount churn -> LayoutObject::Destroy() runs DestroyLayer() while stale
+       older-generation fragments in the parent tree still reference the box
+       (LayoutBox::DisassociatePhysicalFragments only clears layout_results_)
+
+  Expected failures:
+    #25595  CHECK(layer)   in UpdatePositionVisibilityAfterLayout  (SIGTRAP)
+    #25867  null Parent()  in PrePaintTreeWalk::WalkMissedChildren (SIGSEGV @0x28)
+    #25867-2 null Layer()  in CullRectUpdater::PaintPropertiesChanged (SIGSEGV @0x9)
+
+  Note: the site does NOT use position-visibility at all -- matching the
+  diagnostic log (posVis_noOverflow=0 posVis_anchorsVisible=0). Do not add it.
+-->
+<style>
+  html, body { margin: 0; height: 100%; font: 13px/1.4 system-ui, sans-serif; }
+  #log { position: fixed; left: 0; bottom: 0; z-index: 999; background: #000c;
+         color: #0f0; padding: 4px 8px; font-family: monospace; }
+
+  .row { display: flex; gap: 24px; padding: 8px 12px; }
+
+  /* anchor (the hover target) */
+  .trigger {
+    display: inline-flex; padding: 6px 10px; border: 1px solid #888;
+    border-radius: 4px; background: #eee; white-space: nowrap;
+  }
+
+  /* tooltip -- structure copied from the site */
+  .tooltip {
+    z-index: 30;
+    visibility: hidden;
+    position: fixed;
+    opacity: 0;
+    pointer-events: none;
+    position-try-fallbacks: flip-block, flip-inline;
+    --tooltip-arrow-size: 6px;
+    width: max-content;
+    transition: visibility, opacity;
+
+    position-area: bottom;
+    justify-self: anchor-center;
+
+    background: #222; color: #fff; padding: 4px 8px; border-radius: 4px;
+  }
+  .tooltip.shown { visibility: visible; opacity: 1; pointer-events: auto; }
+
+  /* the custom fallbacks the site declares */
+  @position-try --flip-to-bottom { position-area: bottom; margin-top: -1px; }
+  @position-try --flip-to-top {
+    position-area: top;
+    margin-bottom: calc(var(--tooltip-arrow-size) + var(--tooltip-offset-distance, 0px));
+    margin-top: -2px;
+  }
+  @position-try --flip-to-right {
+    position-area: right;
+    margin-left: calc(var(--tooltip-arrow-size) + var(--tooltip-offset-distance, 0px));
+    margin-top: -3px;
+  }
+  @position-try --flip-to-left {
+    position-area: left;
+    margin-right: calc(var(--tooltip-arrow-size) + var(--tooltip-offset-distance, 0px));
+    margin-top: -4px;
+  }
+  /* custom-ident fallbacks, as used by .IK30Nu on the site */
+  .tooltip.custom { position-try-fallbacks: --flip-to-top, --flip-to-right, --flip-to-left; }
+</style>
+
+<div id="stage"></div>
+<div id="log">starting…</div>
+
+<script>
+// Anchors are spread to the viewport edges on purpose: position-area:bottom
+// overflows there, so the engine actually has to iterate the try-fallback list
+// (that is the loop which calls SetStyle(..., kNo) during layout).
+const SPOTS = [
+  { top: '2px',                left: '2px'   },
+  { top: '2px',                right: '2px'  },
+  { bottom: '2px',             left: '2px'   },
+  { bottom: '2px',             right: '2px'  },
+  { top: '50%',                left: '2px'   },
+  { top: '50%',                right: '2px'  },
+  { top: '2px',                left: '50%'   },
+  { bottom: '2px',             left: '50%'   },
+];
+
+const stage = document.getElementById('stage');
+const logEl = document.getElementById('log');
+let seq = 0, cycles = 0;
+
+function makePair(spot, i) {
+  const wrap = document.createElement('div');
+  wrap.style.position = 'absolute';
+  for (const k in spot) wrap.style[k] = spot[k];
+
+  const trigger = document.createElement('span');
+  trigger.className = 'trigger';
+  // React-ish unique ids, like tooltip-_R_15dm91tva8q_ in the crash log
+  const id = '_R_' + (seq++).toString(36) + 'tva8q';
+  trigger.style.anchorName = '--a' + id;
+  trigger.textContent = 'trigger ' + i;
+
+  const tip = document.createElement('div');
+  tip.className = 'tooltip' + (i % 2 ? ' custom' : '');
+  tip.id = 'tooltip-' + id;
+  tip.style.positionAnchor = '--a' + id;
+  tip.textContent = 'tooltip ' + i + ' — some reasonably long text';
+
+  wrap.append(trigger, tip);
+  return { wrap, trigger, tip };
+}
+
+// Forced synchronous layout from inside a timer + microtask, which is exactly
+// the stack in #25595: DOMTimer::Fired -> RunPendingMicrotask ->
+// getComputedStyle -> UpdateStyleAndLayoutTreeForElement -> OutOfFlowLayoutPart.
+function forceLayout(el) {
+  Promise.resolve().then(() => {
+    if (!el.isConnected) return;
+    getComputedStyle(el).insetBlockStart;
+    getComputedStyle(el).marginTop;
+    void el.offsetTop;
+  });
+}
+
+function cycle() {
+  const live = [];
+
+  SPOTS.forEach((spot, i) => {
+    const { wrap, trigger, tip } = makePair(spot, i);
+    stage.appendChild(wrap);
+    live.push({ wrap, trigger, tip });
+
+    // show -> forces the try-fallback loop to run for a fixed-pos OOF box
+    tip.classList.add('shown');
+    forceLayout(tip);
+  });
+
+  // Mutate the anchors so the anchored boxes must be re-laid-out, then tear
+  // everything down while layout/pre-paint work for them is still pending.
+  setTimeout(() => {
+    live.forEach(({ trigger, tip }, i) => {
+      trigger.textContent = 'trigger ' + i + ' ' + '·'.repeat(cycles % 12);
+      forceLayout(tip);
+    });
+
+    requestAnimationFrame(() => {
+      live.forEach(({ wrap, tip }, i) => {
+        // Destroy the tooltip first (LayoutObject::Destroy -> DestroyLayer),
+        // then the whole subtree. Alternate the order to widen the window.
+        if (i % 3 === 0) {
+          tip.remove();
+        } else if (i % 3 === 1) {
+          wrap.remove();
+        } else {
+          tip.remove();
+          wrap.remove();
+        }
+      });
+      cycles++;
+      logEl.textContent = 'cycles: ' + cycles + '  (still alive)';
+      requestAnimationFrame(cycle);
+    });
+  }, 0);
+}
+
+// Keep the viewport clip changing too: CullRectUpdater::PaintPropertiesChanged
+// only walks LayoutView's fixed-positioned fragment children when the overflow
+// clip node actually changed.
+let h = 0;
+setInterval(() => {
+  h = (h + 1) % 40;
+  stage.style.height = (2000 + h * 25) + 'px';
+}, 50);
+
+cycle();
+</script>

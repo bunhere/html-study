@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이모지 / GMS 폰트 진단 (WHALE_FONTDIAG)</title>
+<style>
+  body { font-family: sans-serif; margin: 12px; line-height: 1.5; }
+  h2 { font-size: 15px; margin: 20px 0 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+  .note { font-size: 12px; color: #555; margin: 4px 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .cell { border: 1px solid #ddd; border-radius: 6px; padding: 5px 7px; text-align: center; min-width: 54px; }
+  .glyph { font-size: 30px; line-height: 1.2; }
+  .cp { font-size: 9px; color: #777; word-break: break-all; }
+  .tofu { background: #ffe4e4; border-color: #e88; }
+  .ok { background: #e8f6e8; border-color: #8c8; }
+  .sizes span { margin-right: 10px; }
+  #summary { background: #f4f4f4; border-radius: 6px; padding: 10px; font-size: 13px; white-space: pre-wrap; }
+  button { font-size: 14px; padding: 8px 14px; margin: 6px 6px 6px 0; }
+  code { background: #eee; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1 style="font-size:17px">이모지 / GMS 폰트 진단</h1>
+<p class="note">
+  logcat 을 <code>grep WHALE_FONTDIAG</code> 로 띄운 채 이 페이지를 열고, 아래 순서대로 버튼을 누르세요.
+  붉은 칸(tofu)은 해당 이모지를 어떤 폰트로도 그리지 못한 것입니다.
+</p>
+
+<div id="summary">측정 대기 중…</div>
+<button onclick="runDetect()">1. tofu 판정 실행</button>
+<button onclick="renderSizes()">2. 크기 변형 렌더 (sync IPC 반복 확인)</button>
+<button onclick="renderLocal()">3. local("Google Sans") 매칭 확인</button>
+
+<div id="sections"></div>
+
+<h2>크기 변형 (FontCacheKey 는 폰트 크기를 포함 → 크기마다 별도 조회)</h2>
+<p class="note">lazy 모드에서 크기마다 sync IPC 가 반복되는지 확인하는 용도입니다.</p>
+<div id="sizes" class="sizes"></div>
+
+<h2>local() 매칭</h2>
+<p class="note">
+  아래 줄이 시스템 기본 폰트와 다르게 보이면 <code>local("Google Sans")</code> 매칭이 살아있는 것입니다.
+  웨일에서는 매칭 실패(=기본 폰트와 동일)가 정상이며, 그래야 Google Sans 를 목록에서 빼도 안전합니다.
+</p>
+<style>
+  @font-face { font-family: DiagGoogleSans; src: local("Google Sans"); }
+  @font-face { font-family: DiagGoogleSansPS; src: local("GoogleSans-Regular"); }
+</style>
+<div id="localout" style="font-size:20px">
+  <div style="font-family: DiagGoogleSans">local("Google Sans") — Handgloves 123</div>
+  <div style="font-family: DiagGoogleSansPS">local("GoogleSans-Regular") — Handgloves 123</div>
+  <div>기준(시스템 기본) — Handgloves 123</div>
+</div>
+
+<script>
+// 유니코드 버전별 대표 이모지. 뒤쪽 버전일수록 펌웨어 폰트에 없을 가능성이 높고,
+// GMS Core 의 Noto Color Emoji Compat 이 있어야 그려진다.
+const GROUPS = [
+  ["기본 (Unicode 6~12) — 어떤 단말이든 나와야 정상",
+   ["\u{1F600}", "\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F680}", "\u{1F1F0}\u{1F1F7}"]],
+  ["Unicode 13.0 (2020)",
+   ["\u{1FAA9}", "\u{1F972}", "\u{1FAC0}", "\u{1F978}", "\u{1FAE0}"]],
+  ["Unicode 13.1 — ZWJ 시퀀스 (코드 주석이 예로 든 WOMAN FEEDING BABY 포함)",
+   ["\u{1F469}\u{200D}\u{1F37C}", "\u{1F468}\u{200D}\u{1F37C}", "\u{1F9D1}\u{200D}\u{1F37C}",
+    "\u{2764}\u{FE0F}\u{200D}\u{1F525}", "\u{1F62E}\u{200D}\u{1F4A8}"]],
+  ["Unicode 14.0 (2021)",
+   ["\u{1FAE0}", "\u{1FAE1}", "\u{1FAE2}", "\u{1FAE3}", "\u{1FAE4}", "\u{1FAF0}", "\u{1FAF1}"]],
+  ["Unicode 15.0 (2022)",
+   ["\u{1FAE8}", "\u{1FA77}", "\u{1FA7B}", "\u{1FAB7}", "\u{1FABF}", "\u{1FAD7}"]],
+  ["Unicode 15.1 (2023) — ZWJ",
+   ["\u{1F6DC}", "\u{1F9D1}\u{200D}\u{1F9D2}", "\u{1F426}\u{200D}\u{2B1B}",
+    "\u{1F344}\u{200D}\u{1F7EB}", "\u{26D3}\u{FE0F}\u{200D}\u{1F4A5}"]],
+  ["Unicode 16.0 (2024) — 가장 최신, 대부분의 펌웨어 폰트에 없음",
+   ["\u{1FADC}", "\u{1FADF}", "\u{1FAE9}", "\u{1F6DD}", "\u{1FA89}", "\u{1FA8F}"]],
+];
+
+function cpLabel(s) {
+  return [...s].map(ch => "U+" + ch.codePointAt(0).toString(16).toUpperCase()).join(" ");
+}
+
+// tofu 판정: 미할당 코드포인트의 렌더 폭을 기준선으로 삼아 비교한다.
+// 폭이 같고 이모지 폰트 폭(보통 더 넓음)과 다르면 .notdef 로 본다.
+let ctx;
+function widthOf(s, font) {
+  if (!ctx) ctx = document.createElement("canvas").getContext("2d");
+  ctx.font = font;
+  return ctx.measureText(s).width;
+}
+
+function runDetect() {
+  const font = "32px sans-serif";
+  const tofuRef = widthOf("\u{10FFFD}", font);   // 미할당 (private use, 확실한 tofu)
+  const okRef   = widthOf("\u{1F600}", font);    // 확실히 있는 이모지
+  const box = document.getElementById("sections");
+  box.innerHTML = "";
+  let total = 0, tofuCount = 0;
+  const missing = [];
+
+  for (const [title, list] of GROUPS) {
+    const h = document.createElement("h2"); h.textContent = title; box.appendChild(h);
+    const row = document.createElement("div"); row.className = "row";
+    for (const e of list) {
+      total++;
+      const w = widthOf(e, font);
+      // 기준선과의 거리로 판정. 두 기준이 비슷하면(구분 불가) 판정 보류.
+      const looksTofu = Math.abs(okRef - tofuRef) > 1 &&
+                        Math.abs(w - tofuRef) < Math.abs(w - okRef);
+      if (looksTofu) { tofuCount++; missing.push(cpLabel(e)); }
+      const c = document.createElement("div");
+      c.className = "cell " + (looksTofu ? "tofu" : "ok");
+      c.innerHTML = '<div class="glyph">' + e + '</div><div class="cp">' + cpLabel(e) + '</div>';
+      row.appendChild(c);
+    }
+    box.appendChild(row);
+  }
+
+  document.getElementById("summary").textContent =
+    "tofu 기준폭=" + tofuRef.toFixed(1) + ", 정상 이모지폭=" + okRef.toFixed(1) + "\n" +
+    "판정: " + tofuCount + " / " + total + " 개가 미지원(tofu)으로 추정\n" +
+    (Math.abs(okRef - tofuRef) <= 1
+      ? "⚠ 두 기준폭이 거의 같아 자동판정 신뢰도 낮음 — 눈으로 확인하세요\n"
+      : "") +
+    (missing.length ? "미지원 추정: " + missing.join(" / ") : "미지원 없음");
+}
+
+function renderSizes() {
+  const el = document.getElementById("sizes");
+  el.innerHTML = "";
+  // 크기를 바꿔가며 같은 이모지를 그린다 → FontCacheKey 가 달라져 조회가 반복된다.
+  for (const px of [12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64]) {
+    const s = document.createElement("span");
+    s.style.fontSize = px + "px";
+    s.textContent = "\u{1F469}\u{200D}\u{1F37C}\u{1FAE0}\u{1F6DC}";
+    el.appendChild(s);
+  }
+  el.appendChild(document.createTextNode(" ← logcat 에서 SYNC 로그가 몇 번 찍히는지 확인"));
+}
+
+function renderLocal() {
+  const base = widthOf("Handgloves 123", '20px sans-serif');
+  const gs   = widthOf("Handgloves 123", '20px DiagGoogleSans');
+  const gsps = widthOf("Handgloves 123", '20px DiagGoogleSansPS');
+  document.getElementById("summary").textContent =
+    "기준(sans-serif) 폭 = " + base.toFixed(2) + "\n" +
+    'local("Google Sans") 폭 = ' + gs.toFixed(2) +
+      (Math.abs(gs - base) < 0.5 ? "  → 매칭 실패(정상, 제거 안전)" : "  → ⚠ 매칭 성공 (제거 시 렌더 변화)") + "\n" +
+    'local("GoogleSans-Regular") 폭 = ' + gsps.toFixed(2) +
+      (Math.abs(gsps - base) < 0.5 ? "  → 매칭 실패(정상, 제거 안전)" : "  → ⚠ 매칭 성공 (제거 시 렌더 변화)");
+}
+
+document.fonts.ready.then(runDetect);
+</script>
+</body>
+</html>

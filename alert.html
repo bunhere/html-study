@@ -1,0 +1,7 @@
+<body><h1 id="t">-</h1>
+  <script>
+    let n = 0;
+    (function loop() {
+      setTimeout(() => { document.getElementById('t').textContent = ++n; alert('boom ' + n); loop(); }, 60);
+    })();
+  </script></body>

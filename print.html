@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>reading-flow flex + 인쇄 페이지 분할</title>
+<style>
+  /* 여러 페이지에 걸치는 reading-flow flex 컨테이너 */
+  .flex { display: flex; flex-direction: column; reading-flow: flex-visual; }
+  .item { height: 400px; border: 1px solid #888; margin: 4px; }
+</style>
+<p>3점 메뉴 → 인쇄 (또는 아래 버튼). 수정 전: 인쇄 미리보기 생성 중 렌더러 SIGTRAP.</p>
+<button onclick="print()">window.print()</button>
+<div class="flex" id="c"></div>
+<script>
+  const c = document.getElementById('c');
+  for (let i = 0; i < 20; i++) {
+    const d = document.createElement('div');
+    d.className = 'item'; d.textContent = 'item ' + i; d.tabIndex = 0;
+    c.appendChild(d);
+  }
+</script>

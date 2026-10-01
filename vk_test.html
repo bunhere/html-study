@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- interactive-widget 는 ?mode= 로 바꾼다 (overlays-content | resizes-visual | resizes-content | none) -->
+<script>
+  const mode = new URLSearchParams(location.search).get('mode') || 'overlays-content';
+  const content = 'width=device-width, initial-scale=1, viewport-fit=cover' +
+      (mode === 'none' ? '' : ', interactive-widget=' + mode);
+  document.write('<meta name="viewport" content="' + content + '">');
+</script>
+<title>VK test</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; height: 100%; font: 13px/1.4 system-ui, sans-serif; }
+  body { background: repeating-linear-gradient(#0000 0 49px, #8884 49px 50px); }
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3;
+    padding: 6px 8px; background: #000c; color: #fff; font: 11px/1.35 ui-monospace, monospace;
+    white-space: pre-wrap; max-height: 45vh; overflow: auto;
+  }
+  #nav { margin-top: 4px; }
+  #nav a { color: #9cf; margin-right: 8px; }
+  /* 1) CSS env 로 키보드 위에 붙는 시트 (ChatGPT 와 같은 방식) */
+  #sheet {
+    position: fixed; left: 8px; right: 8px; z-index: 2;
+    bottom: env(keyboard-inset-height, 0px);
+    padding: 12px; border-radius: 16px 16px 0 0;
+    background: #2a6; color: #fff; box-shadow: 0 -2px 12px #0006;
+  }
+  #sheet input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; }
+  /* 2) 레이아웃 뷰포트 기준 바닥 마커 (100% / dvh / lvh / svh 비교) */
+  .bar { position: fixed; left: 0; width: 6px; z-index: 1; }
+  #b100 { top: 0; height: 100%; background: red; }
+  #bdvh { left: 8px; top: 0; height: 100dvh; background: orange; }
+  #bsvh { left: 16px; top: 0; height: 100svh; background: yellow; }
+  #benv { left: 24px; top: 0; height: calc(100dvh - env(keyboard-inset-height, 0px)); background: cyan; }
+</style>
+</head>
+<body>
+<div class="bar" id="b100"></div><div class="bar" id="bdvh"></div>
+<div class="bar" id="bsvh"></div><div class="bar" id="benv"></div>
+<div id="hud"><span id="state"></span>
+<div id="nav">mode:
+  <a href="?mode=overlays-content">overlays</a><a href="?mode=resizes-visual">visual</a><a href="?mode=resizes-content">content</a><a href="?mode=none">none</a>
+  <label><input type="checkbox" id="js"> JS overlaysContent</label>
+</div><span id="log"></span></div>
+
+<div id="sheet">
+  <div>env(keyboard-inset-height) 로 키보드 위에 붙는 시트</div>
+  <input id="field" placeholder="여기를 탭해서 키보드 띄우기" inputmode="email">
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const vk = navigator.virtualKeyboard;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;' +
+      'height:env(keyboard-inset-height,-1px);width:env(keyboard-inset-width,-1px);' +
+      'margin-top:env(keyboard-inset-top,-1px);margin-left:env(keyboard-inset-bottom,-1px)';
+  document.body.appendChild(probe);
+  const h = (id) => $(id).getBoundingClientRect().height.toFixed(0);
+  const lines = [];
+  let last = '';
+
+  function state() {
+    const vv = visualViewport, p = getComputedStyle(probe), r = vk && vk.boundingRect;
+    const s = $('sheet').getBoundingClientRect(), f = $('field').getBoundingClientRect();
+    return `mode=${mode} js.overlaysContent=${vk ? vk.overlaysContent : 'n/a'}
+inner=${innerWidth}x${innerHeight}  docEl.client=${document.documentElement.clientHeight}
+vv=${vv.width.toFixed(0)}x${vv.height.toFixed(0)} off=${vv.offsetTop.toFixed(0)} scale=${vv.scale.toFixed(2)}
+vk.rect=${r ? `y${r.y} h${r.height} w${r.width}` : 'n/a'}
+env top=${p.marginTop} bottom=${p.marginLeft} h=${p.height} w=${p.width}
+100%=${h('b100')} dvh=${h('bdvh')} svh=${h('bsvh')} dvh-env=${h('benv')}
+sheet y${s.top.toFixed(0)}~${s.bottom.toFixed(0)}  input y${f.top.toFixed(0)}~${f.bottom.toFixed(0)}  focused=${document.activeElement === $('field')}`;
+  }
+  function render(ev) {
+    const st = state();
+    if (ev) {
+      const t = (performance.now() / 1000).toFixed(2);
+      lines.unshift(`[${t}] ${ev}: inner=${innerHeight} vv=${visualViewport.height.toFixed(0)}` +
+          ` vk.h=${vk ? vk.boundingRect.height : '-'} env.h=${getComputedStyle(probe).height}`);
+      lines.length = Math.min(lines.length, 12);
+    }
+    $('state').textContent = st;
+    $('log').textContent = '\n' + lines.join('\n');
+    if (st !== last) { last = st; console.log('[vktest]', ev || 'tick', '\n' + st); }
+  }
+  addEventListener('resize', () => render('window.resize'));
+  visualViewport.addEventListener('resize', () => render('vv.resize'));
+  visualViewport.addEventListener('scroll', () => render('vv.scroll'));
+  vk && vk.addEventListener('geometrychange', () => render('geometrychange'));
+  $('field').addEventListener('focus', () => render('focus'));
+  $('field').addEventListener('blur', () => render('blur'));
+  $('js').addEventListener('change', (e) => { if (vk) vk.overlaysContent = e.target.checked; render('js toggle'); });
+  setInterval(() => render(), 250);
+  render('load');
+</script>
+</body>
+</html>

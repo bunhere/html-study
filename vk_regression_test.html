@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<script>
+  const MODE = new URLSearchParams(location.search).get('mode') || 'resizes-visual';
+  document.write('<meta name="viewport" content="width=device-width, initial-scale=1' +
+      (MODE === 'none' ? '' : ', interactive-widget=' + MODE) + '">');
+</script>
+<title>VK 회귀 테스트</title>
+<style>
+  :root { color-scheme: light dark; --ok: #1a7f37; --bad: #cf222e; --warn: #9a6700; --line: #8884; }
+  html, body { margin: 0; font: 14px/1.45 system-ui, sans-serif; }
+  body { padding: 0 12px 40vh; }
+  #hud {
+    position: sticky; top: 0; z-index: 10; margin: 0 -12px; padding: 6px 10px;
+    background: #000d; color: #fff; font: 11px/1.35 ui-monospace, monospace; white-space: pre-wrap;
+  }
+  #hud b { color: #ffd33d; }
+  #verdict { font-weight: bold; }
+  .ok { color: #3fb950 !important; } .bad { color: #ff7b72 !important; } .warn { color: #d29922 !important; }
+  h2 { font-size: 15px; margin: 22px 0 6px; border-bottom: 1px solid var(--line); }
+  .how { font-size: 12px; opacity: .8; margin: 2px 0 8px; }
+  input, textarea, button, select { font-size: 16px; }
+  input, textarea { width: 100%; box-sizing: border-box; padding: 8px; }
+  button { padding: 8px 10px; margin: 2px 4px 2px 0; }
+  nav a { margin-right: 10px; }
+  nav a.cur { font-weight: bold; text-decoration: none; }
+  #log { font: 11px/1.35 ui-monospace, monospace; white-space: pre-wrap; max-height: 30vh; overflow: auto;
+         border: 1px solid var(--line); padding: 4px; }
+  /* 화면 바닥 기준 고정 바: 키보드와 웹 하단 사이 빈 띠 확인용 */
+  #bottomBar {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 14px; z-index: 9;
+    background: repeating-linear-gradient(45deg, #e5534b 0 8px, #ffd33d 8px 16px);
+  }
+  /* overlays-content 용 시트 (ChatGPT 로그인과 같은 방식) */
+  #sheet {
+    display: none; position: fixed; left: 8px; right: 8px; z-index: 8;
+    bottom: env(keyboard-inset-height, 0px); padding: 10px; border-radius: 14px 14px 0 0;
+    background: #2a6; color: #fff; box-shadow: 0 -2px 12px #0006;
+  }
+  body.mode-overlays-content #sheet { display: block; }
+  .find { color: #888; }
+  label { display: block; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div id="hud"><span id="state"></span>
+<span id="verdict"></span></div>
+
+<nav>모드:
+  <a href="?mode=resizes-visual">visual(기본)</a>
+  <a href="?mode=resizes-content">content(Gemini)</a>
+  <a href="?mode=overlays-content">overlays(ChatGPT)</a>
+  <a href="?mode=none">meta없음</a>
+</nav>
+<p class="how">
+  화면 맨 아래 <b>빨강·노랑 줄무늬 바</b>는 웹 영역 바닥에 붙어 있습니다. 키보드를 띄웠을 때 이 바가
+  키보드 바로 위에 붙어 있어야 하고(resizes-content), 바와 키보드 사이에 빈 띠가 있으면 안 됩니다.
+  기준값(키보드 없을 때)은 입력창에 포커스가 없을 때 자동으로 기록됩니다.
+</p>
+
+<h2>1. 일반 입력 (C-1, A-1)</h2>
+<p class="how">
+  탭 → HUD 판정 확인. <b>visual</b>: inner 변화 0, vv 만 줄어야 함.
+  <b>content</b>: inner 가 키보드만큼 줄고 바닥 바가 키보드 위. <b>overlays</b>: inner 변화 0, vk.rect 높이 &gt; 0.
+</p>
+<input id="topInput" placeholder="위쪽 입력창">
+
+<h2>2. 다이얼로그 (B-2, B-3)</h2>
+<p class="how">
+  버튼 → 다이얼로그 입력란에 키보드를 띄워 입력 → 닫기. 아래 결과에 <b>다이얼로그 동안 웹 resize 0회</b>여야 합니다.
+  닫은 뒤 바로 1번 입력창을 탭해 판정이 정상인지도 확인(B-3).
+</p>
+<button id="btnPrompt">prompt()</button>
+<button id="btnConfirm">confirm()</button>
+<div id="dialogResult" class="how"></div>
+
+<h2>3. 찾기 툴바 (B-1)</h2>
+<p class="how">
+  3닷 → 페이지 내 찾기 → <b>찾기테스트</b> 입력. 찾기 툴바가 키보드 바로 위에 붙어야 하고, 키보드 높이만큼 떠 있으면 실패.
+  키보드 내렸다 올리기, 찾기 닫고 다시 열기도 반복.
+</p>
+<p class="find" id="findText"></p>
+
+<h2>4. 알림창 (B-4)</h2>
+<p class="how">
+  1번 입력창으로 키보드를 띄운 상태에서 알림창을 내렸다 올리기. 아래 카운터가 늘지 않아야 합니다.
+</p>
+<div id="focusResult" class="how"></div>
+
+<h2>5. 분할 화면 / 크기 변화 (D-2)</h2>
+<p class="how">
+  overlays 모드에서 키보드를 띄운 채 분할선 드래그 → 키보드를 닫았을 때 inner 가 화면 크기와 맞는지(높이가 예전 값에 고정되지 않는지).
+</p>
+
+<h2>6. 바닥 입력 (스크롤 진입)</h2>
+<p class="how">페이지 맨 아래 입력창을 탭 → HUD 의 <b>포커스 입력창 보임</b>이 yes 여야 합니다.</p>
+<div style="height:120vh;border-left:4px dashed var(--line);margin:8px 0;padding-left:8px" class="how">(스크롤 여백)</div>
+<textarea id="bottomInput" rows="2" placeholder="맨 아래 입력창"></textarea>
+
+<h2>로그</h2>
+<button id="btnCopy">로그 복사</button>
+<button id="btnClear">로그 지우기</button>
+<button id="btnBaseline">기준값 다시 잡기</button>
+<div id="log"></div>
+
+<div id="sheet">
+  <div>env(keyboard-inset-height) 시트: 키보드 바로 위에 붙어야 함</div>
+  <input id="sheetInput" placeholder="시트 입력창" inputmode="email">
+</div>
+<div id="bottomBar"></div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  document.body.classList.add('mode-' + MODE);
+  for (const a of document.querySelectorAll('nav a')) {
+    if (a.getAttribute('href') === '?mode=' + MODE) a.classList.add('cur');
+  }
+  $('findText').textContent = Array.from({length: 12}, (_, i) => '찾기테스트' + (i + 1)).join(' · ');
+
+  const vk = navigator.virtualKeyboard;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;' +
+      'height:env(keyboard-inset-height,0px);margin-top:env(keyboard-inset-top,0px)';
+  document.body.appendChild(probe);
+
+  const lines = [];
+  function log(msg) {
+    const t = (performance.now() / 1000).toFixed(2);
+    lines.unshift(`[${t}] ${msg}`);
+    lines.length = Math.min(lines.length, 200);
+    $('log').textContent = lines.join('\n');
+  }
+
+  let baseline = null;
+  function snapshot() {
+    const vv = visualViewport, p = getComputedStyle(probe), r = vk && vk.boundingRect;
+    return {
+      inner: innerHeight, innerW: innerWidth, client: document.documentElement.clientHeight,
+      vvH: Math.round(vv.height), vvTop: Math.round(vv.offsetTop), scale: vv.scale,
+      vkH: r ? Math.round(r.height) : -1, vkY: r ? Math.round(r.y) : -1,
+      envH: parseFloat(p.height) || 0, envTop: parseFloat(p.marginTop) || 0,
+      bar: Math.round($('bottomBar').getBoundingClientRect().bottom),
+    };
+  }
+  function editableFocused() {
+    const a = document.activeElement;
+    return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+  }
+  function setBaseline(reason) {
+    baseline = snapshot();
+    log(`기준값(${reason}): inner=${baseline.inner} vv=${baseline.vvH} w=${baseline.innerW}`);
+  }
+
+  function verdict(s) {
+    if (!baseline || !editableFocused()) return ['', ''];
+    const dInner = baseline.inner - s.inner;
+    const dVv = baseline.vvH + baseline.vvTop - (s.vvH + s.vvTop);
+    const keyboardUp = dVv > 50 || dInner > 50 || s.vkH > 0;
+    if (!keyboardUp) return ['키보드 감지 안 됨(아직 안 떴거나 외장 키보드)', 'warn'];
+    if (s.innerW !== baseline.innerW) return ['폭이 바뀜 — 기준값 다시 잡기 필요', 'warn'];
+    if (MODE === 'resizes-content') {
+      return dInner > 50 ? [`OK: inner ${dInner}px 줄어듦(웹 영역이 키보드만큼 줄어듦)`, 'ok']
+                         : [`FAIL: inner 가 안 줄어듦 → 웹이 키보드 뒤에 남음`, 'bad'];
+    }
+    if (MODE === 'overlays-content') {
+      if (Math.abs(dInner) > 2) return [`FAIL: overlays 인데 inner 가 ${-dInner}px 변함`, 'bad'];
+      if (s.vkH <= 0 && s.envH <= 0) return ['FAIL: vk.rect/env 높이 0', 'bad'];
+      return [`OK: inner 유지, vk.rect y${s.vkY} h${s.vkH}, env h${s.envH}`, 'ok'];
+    }
+    if (Math.abs(dInner) > 2) {
+      return [`FAIL: ${MODE} 인데 inner 가 ${-dInner}px 변함(레이아웃 뷰포트가 바뀜)`, 'bad'];
+    }
+    return [`OK: inner 유지, vv ${dVv}px 줄어듦`, 'ok'];
+  }
+
+  function focusedVisible() {
+    if (!editableFocused()) return '-';
+    const r = document.activeElement.getBoundingClientRect(), vv = visualViewport;
+    return r.top >= vv.offsetTop - 1 && r.bottom <= vv.offsetTop + vv.height + 1 ? 'yes' : 'NO';
+  }
+
+  let last = '';
+  function render() {
+    const s = snapshot();
+    if (!editableFocused() && !dialogOpen && (!baseline || s.innerW !== baseline.innerW ||
+        (s.inner !== baseline.inner && s.vkH <= 0 && Math.abs(s.vvH - s.inner) < 2))) {
+      setBaseline('자동');
+    }
+    const b = baseline || s;
+    const st =
+`mode=<b>${MODE}</b>  dpr=${devicePixelRatio}  screen=${screen.width}x${screen.height}
+inner=${s.inner} (기준 ${b.inner}, Δ${s.inner - b.inner})  client=${s.client}
+vv=${s.vvH} off=${s.vvTop} (기준 ${b.vvH}) scale=${s.scale.toFixed(2)}
+vk.rect y${s.vkY} h${s.vkH}  env top=${s.envTop} h=${s.envH}  바닥바 bottom=${s.bar}
+포커스 입력창 보임: ${focusedVisible()}  focused=${editableFocused()}
+`;
+    $('state').innerHTML = st;
+    const [text, cls] = verdict(s);
+    $('verdict').textContent = text;
+    $('verdict').className = cls;
+    const key = JSON.stringify(s) + text;
+    if (key !== last) { last = key; }
+  }
+
+  addEventListener('resize', () => {
+    resizeCount++;
+    if (dialogOpen) dialogResizeCount++;
+    if (editableFocused()) focusResizeCount++;
+    log(`window.resize inner=${innerHeight}x${innerWidth}`);
+    render();
+  });
+  visualViewport.addEventListener('resize', () => { log(`vv.resize vv=${visualViewport.height.toFixed(0)}`); render(); });
+  vk && vk.addEventListener('geometrychange', () => {
+    const r = vk.boundingRect;
+    log(`geometrychange y${r.y} h${r.height} w${r.width}`);
+    render();
+  });
+  for (const el of document.querySelectorAll('input, textarea')) {
+    el.addEventListener('focus', () => { focusResizeCount = 0; log(`focus ${el.id}`); render(); });
+    el.addEventListener('blur', () => { log(`blur ${el.id}`); render(); });
+  }
+
+  let resizeCount = 0, dialogResizeCount = 0, focusResizeCount = 0, dialogOpen = false;
+
+  // 2. 다이얼로그: 열기 전 크기와 닫은 직후 1.5초간 resize 를 기록한다(다이얼로그 동안 JS 는 멈춰 있어
+  // 그 사이 resize 는 닫힌 뒤에 몰아서 들어온다).
+  function runDialog(kind) {
+    const before = innerHeight;
+    dialogOpen = true;
+    dialogResizeCount = 0;
+    log(`${kind} 열기 inner=${before}`);
+    const t0 = performance.now();
+    const ret = kind === 'prompt' ? prompt('여기에 입력해서 키보드를 띄우세요') : confirm('확인 또는 취소');
+    const after = innerHeight;
+    setTimeout(() => {
+      dialogOpen = false;
+      const ms = Math.round(performance.now() - t0);
+      const pass = dialogResizeCount === 0 && after === before;
+      $('dialogResult').innerHTML =
+          `<span class="${pass ? 'ok' : 'bad'}">${pass ? 'OK' : 'FAIL'}</span>: ${kind} ${ms}ms, ` +
+          `닫은 직후 inner ${before}→${after}, 그 사이/직후 resize ${dialogResizeCount}회 (값=${ret})`;
+      log(`${kind} 닫힘 inner=${after} resize=${dialogResizeCount}`);
+    }, 1500);
+  }
+  $('btnPrompt').onclick = () => runDialog('prompt');
+  $('btnConfirm').onclick = () => runDialog('confirm');
+
+  // 4. 키보드가 떠 있는 동안의 resize 횟수(알림창 내렸다 올려도 늘면 안 됨).
+  setInterval(() => {
+    $('focusResult').innerHTML = editableFocused()
+        ? `포커스 이후 window.resize <b>${focusResizeCount}</b>회 (키보드가 뜰 때 resizes-content 는 1~2회 정상, 이후 늘면 실패)`
+        : '입력창에 포커스가 없음';
+    render();
+  }, 300);
+
+  $('btnCopy').onclick = async () => {
+    const text = $('state').textContent + '\n' + $('verdict').textContent + '\n' +
+        $('dialogResult').textContent + '\n\n' + lines.join('\n');
+    try { await navigator.clipboard.writeText(text); log('로그 복사됨'); }
+    catch (e) { log('복사 실패: ' + e); }
+  };
+  $('btnClear').onclick = () => { lines.length = 0; $('log').textContent = ''; };
+  $('btnBaseline').onclick = () => setBaseline('수동');
+
+  if (vk) log(`navigator.virtualKeyboard 있음 overlaysContent=${vk.overlaysContent}`);
+  else log('navigator.virtualKeyboard 없음');
+  render();
+</script>
+</body>
+</html>
